@@ -1,0 +1,144 @@
+name: Build GunZ Client
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'src/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/build-client.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/build-client.yml'
+  workflow_dispatch:
+
+jobs:
+  build-windows-x86:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Restore vcpkg cache
+      uses: actions/cache/restore@v4
+      with:
+        path: C:\vcpkg\installed
+        key: vcpkg-x86-windows-${{ hashFiles('src/**') }}
+        restore-keys: |
+          vcpkg-x86-windows-
+
+    - name: Install dependencies
+      shell: powershell
+      run: |
+        if (-not (Test-Path "C:\vcpkg\installed\x86-windows")) {
+          vcpkg install openssl:x86-windows zlib:x86-windows --triplet x86-windows
+        }
+        New-Item -ItemType Directory -Force -Path "C:\OpenSSL-Win32\include","C:\OpenSSL-Win32\lib","C:\Program Files (x86)\zlib\include","C:\Program Files (x86)\zlib\lib" | Out-Null
+        Copy-Item "C:\vcpkg\installed\x86-windows\include\openssl" "C:\OpenSSL-Win32\include\" -Recurse -Force -ErrorAction SilentlyContinue
+        Copy-Item "C:\vcpkg\installed\x86-windows\lib\*" "C:\OpenSSL-Win32\lib\" -Force -ErrorAction SilentlyContinue
+        Copy-Item "C:\vcpkg\installed\x86-windows\include\zlib.h" "C:\Program Files (x86)\zlib\include\" -Force -ErrorAction SilentlyContinue
+        Copy-Item "C:\vcpkg\installed\x86-windows\include\zconf.h" "C:\Program Files (x86)\zlib\include\" -Force -ErrorAction SilentlyContinue
+        Copy-Item "C:\vcpkg\installed\x86-windows\lib\zlib.lib" "C:\Program Files (x86)\zlib\lib\zlibstatic.lib" -Force -ErrorAction SilentlyContinue
+
+    - name: Configure CMake (x86)
+      shell: cmd
+      run: |
+        cd ogz-source
+        if not exist build\win32 mkdir build\win32
+        cd build\win32
+        cmake -G "Visual Studio 17 2022" -A Win32 -Wno-dev -DBUILD_SHARED_LIBS=OFF -DZLIB_LIBRARY="C:\Program Files (x86)\zlib\lib\zlibstatic.lib" -DZLIB_INCLUDE_DIR="C:\Program Files (x86)\zlib\include" ..\..\src
+
+    - name: Build Gunz Client (x86)
+      shell: cmd
+      run: |
+        cd ogz-source\build\win32
+        cmake --build . --config Release --target INSTALL
+
+    - name: Copy runtime DLLs
+      shell: powershell
+      run: |
+        Copy-Item "C:\vcpkg\installed\x86-windows\bin\zlib1.dll" "ogz-source\install\client\" -Force -ErrorAction SilentlyContinue
+
+    - name: Upload artifact (x86)
+      uses: actions/upload-artifact@v4
+      with:
+        name: GunZ-Client-Windows-x86
+        path: ogz-source/install/client/
+        retention-days: 7
+
+    - name: Save vcpkg cache
+      uses: actions/cache/save@v4
+      if: always()
+      with:
+        path: C:\vcpkg\installed
+        key: vcpkg-x86-windows-${{ hashFiles('src/**') }}
+
+  build-windows-x64:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Restore vcpkg cache
+      uses: actions/cache/restore@v4
+      with:
+        path: C:\vcpkg\installed
+        key: vcpkg-x64-windows-${{ hashFiles('src/**') }}
+        restore-keys: |
+          vcpkg-x64-windows-
+
+    - name: Install dependencies
+      shell: powershell
+      run: |
+        if (-not (Test-Path "C:\vcpkg\installed\x64-windows")) {
+          vcpkg install openssl:x64-windows zlib:x64-windows --triplet x64-windows
+        }
+        New-Item -ItemType Directory -Force -Path "C:\OpenSSL-Win64\include","C:\OpenSSL-Win64\lib","C:\Program Files (x86)\zlib\include","C:\Program Files (x86)\zlib\lib" | Out-Null
+        Copy-Item "C:\vcpkg\installed\x64-windows\include\openssl" "C:\OpenSSL-Win64\include\" -Recurse -Force -ErrorAction SilentlyContinue
+        Copy-Item "C:\vcpkg\installed\x64-windows\lib\*" "C:\OpenSSL-Win64\lib\" -Force -ErrorAction SilentlyContinue
+        Copy-Item "C:\vcpkg\installed\x64-windows\include\zlib.h" "C:\Program Files (x86)\zlib\include\" -Force -ErrorAction SilentlyContinue
+        Copy-Item "C:\vcpkg\installed\x64-windows\include\zconf.h" "C:\Program Files (x86)\zlib\include\" -Force -ErrorAction SilentlyContinue
+        Copy-Item "C:\vcpkg\installed\x64-windows\lib\zlib.lib" "C:\Program Files (x86)\zlib\lib\zlibstatic.lib" -Force -ErrorAction SilentlyContinue
+
+    - name: Configure CMake (x64)
+      shell: cmd
+      run: |
+        cd ogz-source
+        if not exist build\x64 mkdir build\x64
+        cd build\x64
+        cmake -G "Visual Studio 17 2022" -A x64 -Wno-dev -DBUILD_SHARED_LIBS=OFF -DZLIB_LIBRARY="C:\Program Files (x86)\zlib\lib\zlibstatic.lib" -DZLIB_INCLUDE_DIR="C:\Program Files (x86)\zlib\include" ..\..\src
+
+    - name: Build Gunz Client (x64)
+      shell: cmd
+      run: |
+        cd ogz-source\build\x64
+        cmake --build . --config Release --target INSTALL
+
+    - name: Copy runtime DLLs
+      shell: powershell
+      run: |
+        Copy-Item "C:\vcpkg\installed\x64-windows\bin\zlib1.dll" "ogz-source\install\client\" -Force -ErrorAction SilentlyContinue
+
+    - name: Upload artifact (x64)
+      uses: actions/upload-artifact@v4
+      with:
+        name: GunZ-Client-Windows-x64
+        path: ogz-source/install/client/
+        retention-days: 7
+
+    - name: Save vcpkg cache
+      uses: actions/cache/save@v4
+      if: always()
+      with:
+        path: C:\vcpkg\installed
+        key: vcpkg-x64-windows-${{ hashFiles('src/**') }}
