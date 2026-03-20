@@ -1,0 +1,22 @@
+services:
+  matchserver:
+    build: .
+    platform: linux/amd64
+    container_name: gunz-matchserver
+    ports:
+      - "6000:6000"       # Match server TCP
+      - "6000:6000/udp"   # Match server UDP
+      - "8900:8900/udp"   # Locator service
+    volumes:
+      # Mount config files for easy editing without rebuild
+      - ./server.ini:/app/server.ini:ro
+      - ./Locator.ini:/app/Locator.ini:ro
+      - ./zitem.xml:/app/zitem.xml:ro
+      - ./npc.xml:/app/npc.xml:ro
+      - ./npcset.xml:/app/npcset.xml:ro
+      - ./shop.xml:/app/shop.xml:ro
+      - ./channel.xml:/app/channel.xml:ro
+      - ./channelrule.xml:/app/channelrule.xml:ro
+      - ./questmap.xml:/app/questmap.xml:ro
+      - ./scenario.xml:/app/scenario.xml:ro
+    restart: unless-stopped

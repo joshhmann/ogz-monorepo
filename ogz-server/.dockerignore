@@ -1,0 +1,21 @@
+# Windows binaries (not needed for Linux container)
+*.exe
+*.dll
+
+# macOS files
+.DS_Store
+
+# IDE/Editor files
+.claude/
+.vscode/
+*.swp
+*.swo
+
+# Docker files (don't copy into image)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation
+README.md
+*.txt

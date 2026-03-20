@@ -1,0 +1,30 @@
+FROM --platform=linux/amd64 ubuntu:22.04
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    pkg-config \
+    libsodium-dev \
+    libssl-dev \
+    libsqlite3-dev \
+    libasio-dev \
+    libcurl4-openssl-dev \
+    libsystemd-dev \
+    zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Copy source code
+COPY . .
+
+# Build only MatchServer (not Windows-only tools like PatchCreator)
+RUN mkdir -p build/linux && \
+    cd build/linux && \
+    cmake ../../src/. && \
+    cmake --build . --config Release --target MatchServer && \
+    mkdir -p /build/install && \
+    cp bin/MatchServer /build/install/
+
+# The binary will be at /build/install/MatchServer
