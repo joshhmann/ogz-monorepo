@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-windows-x64:
+  build-and-deploy:
     runs-on: windows-latest
     
     steps:
@@ -25,14 +25,22 @@ jobs:
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11
-      with:
-        vcpkgDirectory: '${{ github.workspace }}/vcpkg'
-        vcpkgGitHubLogin: ${{ secrets.VCPKG_GITHUB_LOGIN }}
-        vcpkgGitHubToken: ${{ secrets.GITHUB_TOKEN }}
-        vcpkgBranch: 'master'
-        vcpkgArgs: 'install openssl:x64-windows zlib:x64-windows'
+    - name: Install vcpkg
+      shell: powershell
+      run: |
+        git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
+        C:\vcpkg\bootstrap-vcpkg.bat
+
+    - name: Install dependencies
+      shell: powershell
+      run: |
+        C:\vcpkg\vcpkg install openssl:x64-windows zlib:x64-windows --triplet x64-windows
+        New-Item -ItemType Directory -Force -Path "C:\OpenSSL-Win64\include","C:\OpenSSL-Win64\lib","C:\Program Files (x86)\zlib\include","C:\Program Files (x86)\zlib\lib" | Out-Null
+        Copy-Item "C:\vcpkg\installed\x64-windows\include\openssl" "C:\OpenSSL-Win64\include\" -Recurse -Force -ErrorAction SilentlyContinue
+        Copy-Item "C:\vcpkg\installed\x64-windows\lib\*" "C:\OpenSSL-Win64\lib\" -Force -ErrorAction SilentlyContinue
+        Copy-Item "C:\vcpkg\installed\x64-windows\include\zlib.h" "C:\Program Files (x86)\zlib\include\" -Force -ErrorAction SilentlyContinue
+        Copy-Item "C:\vcpkg\installed\x64-windows\include\zconf.h" "C:\Program Files (x86)\zlib\include\" -Force -ErrorAction SilentlyContinue
+        Copy-Item "C:\vcpkg\installed\x64-windows\lib\zlib.lib" "C:\Program Files (x86)\zlib\lib\zlibstatic.lib" -Force -ErrorAction SilentlyContinue
 
     - name: Configure CMake
       shell: cmd
@@ -40,7 +48,7 @@ jobs:
         cd ogz-source
         if not exist build\x64 mkdir build\x64
         cd build\x64
-        cmake -G "Visual Studio 17 2022" -A x64 -Wno-dev -DBUILD_SHARED_LIBS=OFF -DCMAKE_TOOLCHAIN_FILE=%cd:0=%\..\vcpkg\scripts\buildsystems\vcpkg.cmake ..\..\src
+        cmake -G "Visual Studio 17 2022" -A x64 -Wno-dev -DBUILD_SHARED_LIBS=OFF -DZLIB_LIBRARY="C:\Program Files (x86)\zlib\lib\zlibstatic.lib" -DZLIB_INCLUDE_DIR="C:\Program Files (x86)\zlib\include" ..\..\src
 
     - name: Build
       shell: cmd
@@ -48,9 +56,27 @@ jobs:
         cd ogz-source\build\x64
         cmake --build . --config Release --target INSTALL
 
+    - name: Copy runtime DLLs
+      shell: powershell
+      run: |
+        Copy-Item "C:\vcpkg\installed\x64-windows\bin\zlib1.dll" "ogz-source\install\client\" -Force -ErrorAction SilentlyContinue
+
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: GunZ-Client-Windows-x64
         path: ogz-source/install/client/
         retention-days: 7
+
+    - name: Deploy to patch server
+      if: github.ref == 'refs/heads/master'
+      uses: appleboy/scp-action@master
+      with:
+        host: ${{ secrets.PATCH_SERVER_HOST }}
+        username: root
+        key: ${{ secrets.PATCH_SERVER_SSH_KEY }}
+        port: 22
+        source: "ogz-source/install/client/*"
+        target: "/var/www/patches/"
+        strip_components: 2
+        overwrite: true
